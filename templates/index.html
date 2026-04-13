@@ -474,6 +474,25 @@
 
                         <div class="raised-card rounded-2xl border border-surf-300/20 bg-dusk-900/45 p-4">
                             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-surf-300">Wallpaper Resolution</p>
+                            <div class="mt-3 grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    @click="setPlatform('phone')"
+                                    :class="selectedPlatform === 'phone' ? 'bg-surf-300 text-dusk-900' : 'bg-slate-900/60 text-slate-200'"
+                                    class="rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition"
+                                >
+                                    Phone
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="setPlatform('desktop')"
+                                    :class="selectedPlatform === 'desktop' ? 'bg-surf-300 text-dusk-900' : 'bg-slate-900/60 text-slate-200'"
+                                    class="rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition"
+                                >
+                                    Desktop
+                                </button>
+                            </div>
+
                             <label class="mt-3 block space-y-1 text-sm">
                                 <span class="text-xs uppercase tracking-[0.14em] text-slate-300">Preset</span>
                                 <select
@@ -481,10 +500,10 @@
                                     @change="applyResolutionPreset()"
                                     class="w-full rounded-xl border border-surf-300/25 bg-slate-950/50 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-surf-300"
                                 >
-                                    <option value="1080x2400">1080 x 2400</option>
-                                    <option value="1170x2532">1170 x 2532</option>
-                                    <option value="1284x2778">1284 x 2778</option>
-                                    <option value="auto">Auto Detect (window.screen)</option>
+                                    <option value="auto">Auto Detect (screen * DPR)</option>
+                                    <template x-for="preset in getVisibleResolutionPresets()" :key="preset.value">
+                                        <option :value="preset.value" x-text="preset.label"></option>
+                                    </template>
                                 </select>
                             </label>
 
@@ -512,8 +531,8 @@
                     <h2 class="font-display text-2xl font-bold text-white">4. Live Wallpaper Preview</h2>
                     <p class="mt-1 text-sm text-slate-300">Canvas redraws automatically whenever schedules, colors, background, or resolution changes.</p>
 
-                    <div class="raised-card mt-5 rounded-3xl border border-surf-300/25 bg-slate-950/45 p-3 md:p-4">
-                        <canvas id="wallpaper-canvas" class="mx-auto w-full max-w-md rounded-2xl border border-slate-200/25 bg-slate-950/30 shadow-2xl"></canvas>
+                    <div class="raised-card mt-5 w-full overflow-hidden rounded-3xl border border-surf-300/25 bg-slate-950/45 p-3 md:p-4">
+                        <canvas id="wallpaper-canvas" class="mx-auto block h-auto max-w-full rounded-2xl border border-slate-200/25 bg-slate-950/30 shadow-2xl" style="max-width: 100%; height: auto; display: block;"></canvas>
                     </div>
                 </section>
 
@@ -574,7 +593,19 @@
                     imageData: null,
                 },
                 resolution: { width: 1080, height: 2400 },
-                selectedResolution: '1080x2400',
+                selectedPlatform: 'phone',
+                selectedResolution: 'auto',
+                phonePresets: [
+                    { value: '1080x2400', label: '1080 x 2400' },
+                    { value: '1170x2532', label: '1170 x 2532' },
+                    { value: '1284x2778', label: '1284 x 2778' },
+                ],
+                desktopPresets: [
+                    { value: '1280x800', label: '1280 x 800' },
+                    { value: '1920x1080', label: '1920 x 1080' },
+                    { value: '2560x1440', label: '2560 x 1440' },
+                    { value: '3840x2160', label: '3840 x 2160' },
+                ],
                 referenceWeekStart: '',
                 uiTheme: 'night',
 
@@ -582,6 +613,7 @@
                     this.uiTheme = this.resolveInitialTheme();
                     this.applyTheme(this.uiTheme);
                     this.referenceWeekStart = this.getCurrentWeekMonday();
+                    this.applyResolutionPreset();
                     this.scheduleRedraw();
                 },
 
@@ -670,13 +702,82 @@
                     this.background.type = 'image';
                 },
 
+                getVisibleResolutionPresets() {
+                    if (this.selectedPlatform === 'desktop') {
+                        return this.desktopPresets;
+                    }
+                    return this.phonePresets;
+                },
+
+                detectPlatformFromInput() {
+                    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+                    const anyCoarsePointer = window.matchMedia('(any-pointer: coarse)').matches;
+                    const touchPoints = navigator.maxTouchPoints || 0;
+
+                    if (coarsePointer || (anyCoarsePointer && touchPoints > 0)) {
+                        return 'phone';
+                    }
+                    return 'desktop';
+                },
+
+                getAutoResolutionForPlatform(platform) {
+                    const dpr = window.devicePixelRatio || 1;
+                    let width = Math.round((window.screen.width || 1080) * dpr);
+                    let height = Math.round((window.screen.height || 2400) * dpr);
+
+                    if (platform === 'phone' && width > height) {
+                        [width, height] = [height, width];
+                    }
+
+                    if (platform === 'desktop' && height > width) {
+                        [width, height] = [height, width];
+                    }
+
+                    return {
+                        width: Math.max(1, width),
+                        height: Math.max(1, height),
+                    };
+                },
+
+                setPlatform(platform) {
+                    if (platform !== 'phone' && platform !== 'desktop') {
+                        return;
+                    }
+
+                    this.selectedPlatform = platform;
+                    const visiblePresets = this.getVisibleResolutionPresets();
+
+                    if (this.selectedResolution === 'auto') {
+                        this.selectedResolution = visiblePresets[0].value;
+                    }
+
+                    const hasActivePreset = visiblePresets.some((preset) => preset.value === this.selectedResolution);
+
+                    if (!hasActivePreset) {
+                        this.selectedResolution = visiblePresets[0].value;
+                    }
+
+                    this.applyResolutionPreset();
+                },
+
+                getAutoResolution() {
+                    const detectedPlatform = this.detectPlatformFromInput();
+                    this.selectedPlatform = detectedPlatform;
+                    return this.getAutoResolutionForPlatform(detectedPlatform);
+                },
+
                 applyResolutionPreset() {
                     if (this.selectedResolution === 'auto') {
-                        const screenWidth = window.screen.width || 1080;
-                        const screenHeight = window.screen.height || 2400;
-                        this.resolution.width = Math.min(screenWidth, screenHeight);
-                        this.resolution.height = Math.max(screenWidth, screenHeight);
+                        const autoResolution = this.getAutoResolution();
+                        this.resolution.width = autoResolution.width;
+                        this.resolution.height = autoResolution.height;
                         return;
+                    }
+
+                    const visiblePresets = this.getVisibleResolutionPresets();
+                    const selectedPresetIsVisible = visiblePresets.some((preset) => preset.value === this.selectedResolution);
+                    if (!selectedPresetIsVisible) {
+                        this.selectedResolution = visiblePresets[0].value;
                     }
 
                     const [widthText, heightText] = this.selectedResolution.split('x');
