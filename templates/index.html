@@ -1,0 +1,750 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-theme="night">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AdDSched Builder</title>
+
+    <link rel="icon" href="{% static 'favicon.png' %}" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        display: ['Bricolage Grotesque', 'sans-serif'],
+                        body: ['Manrope', 'sans-serif'],
+                    },
+                    colors: {
+                        dusk: {
+                            900: '#08131f',
+                            800: '#0f2235',
+                            700: '#15304a',
+                        },
+                        surf: {
+                            400: '#50d8ff',
+                            300: '#7be3ff',
+                        },
+                        ember: {
+                            400: '#ff8b4a',
+                            300: '#ffac7a',
+                        },
+                    },
+                    boxShadow: {
+                        glow: '0 16px 50px rgba(80, 216, 255, 0.22)',
+                    },
+                },
+            },
+        }
+    </script>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <style>
+        :root {
+            --page-bg:
+                radial-gradient(1400px 700px at 8% -12%, rgba(80, 216, 255, 0.22), transparent 58%),
+                radial-gradient(900px 500px at 96% 0%, rgba(255, 139, 74, 0.18), transparent 62%),
+                linear-gradient(170deg, #07101a 0%, #0a1d2d 52%, #08131f 100%);
+            --text-main: #e8f4ff;
+            --text-muted: #b7cadb;
+            --glass: rgba(8, 19, 31, 0.62);
+            --line: rgba(123, 227, 255, 0.22);
+            --panel-shadow: 0 18px 45px rgba(5, 15, 30, 0.35);
+            --card-bg: rgba(11, 27, 43, 0.56);
+            --card-border: rgba(123, 227, 255, 0.22);
+            --card-shadow: rgba(6, 16, 29, 0.5);
+            --input-bg: rgba(2, 10, 20, 0.52);
+            --input-border: rgba(123, 227, 255, 0.3);
+        }
+
+        html[data-theme='day'] {
+            --page-bg:
+                radial-gradient(1200px 650px at 12% -8%, rgba(255, 205, 144, 0.22), transparent 58%),
+                radial-gradient(900px 540px at 95% 2%, rgba(210, 164, 121, 0.18), transparent 60%),
+                linear-gradient(165deg, #fff8ee 0%, #f8ecda 52%, #f2e2cb 100%);
+            --text-main: #2f2417;
+            --text-muted: #6d5a45;
+            --glass: rgba(255, 246, 232, 0.88);
+            --line: rgba(161, 124, 86, 0.22);
+            --panel-shadow: 0 16px 35px rgba(124, 93, 58, 0.2);
+            --card-bg: rgba(255, 252, 246, 0.95);
+            --card-border: rgba(179, 137, 93, 0.28);
+            --card-shadow: rgba(136, 98, 63, 0.22);
+            --input-bg: rgba(255, 255, 255, 0.96);
+            --input-border: rgba(183, 145, 103, 0.44);
+        }
+
+        body {
+            font-family: Manrope, sans-serif;
+            background: var(--page-bg);
+            color: var(--text-main);
+            transition: background 220ms ease, color 220ms ease;
+        }
+
+        .glass-panel {
+            background: var(--glass);
+            border: 1px solid var(--line);
+            backdrop-filter: blur(12px);
+            box-shadow: var(--panel-shadow);
+        }
+
+        .raised-card {
+            background: var(--card-bg) !important;
+            border: 1px solid var(--card-border) !important;
+            box-shadow: 0 10px 26px var(--card-shadow);
+            transition: transform 180ms ease, box-shadow 180ms ease;
+        }
+
+        .raised-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 32px var(--card-shadow);
+        }
+
+        .surface-shine {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .surface-shine::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 46%);
+        }
+
+        .theme-shell input:not([type='color']),
+        .theme-shell select,
+        .theme-shell textarea {
+            background: var(--input-bg) !important;
+            border-color: var(--input-border) !important;
+            color: var(--text-main) !important;
+        }
+
+        .theme-shell input::placeholder {
+            color: var(--text-muted);
+            opacity: 0.9;
+        }
+
+        .theme-toggle-shell {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            box-shadow: 0 8px 20px var(--card-shadow);
+        }
+
+        .theme-toggle-btn {
+            color: var(--text-muted);
+            transition: background 150ms ease, color 150ms ease;
+        }
+
+        .theme-toggle-btn.active {
+            background: rgba(80, 216, 255, 0.2);
+            color: var(--text-main);
+        }
+
+        html[data-theme='day'] .theme-toggle-btn.active {
+            background: rgba(195, 145, 93, 0.22);
+        }
+
+        html[data-theme='day'] .theme-shell [class*='text-white'] {
+            color: var(--text-main) !important;
+        }
+
+        html[data-theme='day'] .theme-shell [class*='text-slate-'] {
+            color: var(--text-muted) !important;
+        }
+
+        html[data-theme='day'] .theme-shell [class*='bg-dusk-900'],
+        html[data-theme='day'] .theme-shell [class*='bg-slate-950'],
+        html[data-theme='day'] .theme-shell [class*='bg-slate-900'] {
+            background-color: var(--card-bg) !important;
+        }
+
+        html[data-theme='day'] .theme-shell [class*='border-surf-300'] {
+            border-color: var(--card-border) !important;
+        }
+
+        .htmx-indicator {
+            display: none;
+        }
+
+        .htmx-request .htmx-indicator {
+            display: inline-flex;
+        }
+
+        .slider-fade {
+            animation: slideFade 220ms ease-out;
+        }
+
+        @media (max-width: 640px) {
+            .mobile-full-btn {
+                width: 100%;
+            }
+
+            .glass-panel {
+                border-radius: 1.1rem !important;
+            }
+
+            .theme-shell {
+                padding-left: 0.85rem !important;
+                padding-right: 0.85rem !important;
+            }
+        }
+
+        @keyframes slideFade {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-shell mx-auto max-w-7xl px-4 py-8 md:px-8 lg:py-10" x-data="scheduleApp()" x-init="init()" @schedule-loaded.window="handleScheduleLoaded($event)">
+        <div class="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between slider-fade">
+            <div>
+                <h1 class="font-display text-4xl font-extrabold leading-tight text-white md:text-5xl">
+                    AdDSched
+                </h1>
+                <p class="mt-2 max-w-2xl text-sm text-slate-200/90 md:text-base">
+                    Paste SIS schedule text, style your classes, and export a wallpaper or recurring calendar file in minutes.
+                </p>
+            </div>
+            <div class="theme-toggle-shell inline-flex items-center gap-1 rounded-2xl p-1.5">
+                <button
+                    type="button"
+                    class="theme-toggle-btn rounded-xl px-3 py-1.5 text-xs font-semibold uppercase tracking-wider"
+                    :class="{ 'active': uiTheme === 'day' }"
+                    @click="setTheme('day')"
+                >
+                    Day
+                </button>
+                <button
+                    type="button"
+                    class="theme-toggle-btn rounded-xl px-3 py-1.5 text-xs font-semibold uppercase tracking-wider"
+                    :class="{ 'active': uiTheme === 'night' }"
+                    @click="setTheme('night')"
+                >
+                    Night
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+            <div class="space-y-6">
+                <section class="glass-panel surface-shine rounded-3xl p-5 md:p-6 slider-fade">
+                    <div class="mb-4 flex items-center justify-between">
+                        <h2 class="font-display text-2xl font-bold text-white">1. Input Subjects</h2>
+                        <button
+                            type="button"
+                            @click="addRow()"
+                            class="rounded-xl bg-surf-400 px-4 py-2 text-xs font-bold uppercase tracking-wider text-dusk-900 transition hover:bg-surf-300"
+                        >
+                            Add Row
+                        </button>
+                    </div>
+
+                    <form
+                        hx-post="/parse/"
+                        hx-target="#parse-result"
+                        hx-swap="none"
+                        hx-indicator="#parse-indicator"
+                        class="space-y-4"
+                    >
+                        {% csrf_token %}
+
+                        <template x-for="(row, index) in rows" :key="row.id">
+                            <div class="raised-card rounded-2xl border border-surf-300/20 bg-dusk-900/55 p-4 slider-fade">
+                                <div class="mb-3 flex items-center justify-between">
+                                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-surf-300/85">Subject Row <span x-text="index + 1"></span></p>
+                                    <button
+                                        type="button"
+                                        @click="removeRow(index)"
+                                        class="rounded-lg border border-ember-300/55 px-3 py-1 text-xs font-semibold text-ember-300 transition hover:bg-ember-400/15"
+                                        :disabled="rows.length === 1"
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+
+                                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    <label class="space-y-1 text-sm">
+                                        <span class="text-xs uppercase tracking-[0.14em] text-slate-300">Subject Number</span>
+                                        <input
+                                            type="text"
+                                            name="subject_no[]"
+                                            x-model="row.subject_no"
+                                            placeholder="CS 3248"
+                                            class="w-full rounded-xl border border-surf-300/25 bg-slate-950/55 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-surf-300"
+                                            required
+                                        >
+                                    </label>
+                                    <label class="space-y-1 text-sm">
+                                        <span class="text-xs uppercase tracking-[0.14em] text-slate-300">Subject Title</span>
+                                        <input
+                                            type="text"
+                                            name="title[]"
+                                            x-model="row.title"
+                                            placeholder="CS THESIS WRITING 1"
+                                            class="w-full rounded-xl border border-surf-300/25 bg-slate-950/55 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-surf-300"
+                                            required
+                                        >
+                                    </label>
+                                </div>
+
+                                <label class="mt-3 block space-y-1 text-sm">
+                                    <span class="text-xs uppercase tracking-[0.14em] text-slate-300">Raw SIS Schedule</span>
+                                    <input
+                                        type="text"
+                                        name="raw_schedule[]"
+                                        x-model="row.raw_schedule"
+                                        placeholder="* 3:00P-5:30P F613E TTh *"
+                                        class="w-full rounded-xl border border-surf-300/25 bg-slate-950/55 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-surf-300"
+                                        required
+                                    >
+                                </label>
+                            </div>
+                        </template>
+
+                        <div class="flex flex-wrap items-center gap-3">
+                            <button
+                                type="submit"
+                                class="mobile-full-btn rounded-xl bg-ember-400 px-5 py-2 text-sm font-bold text-dusk-900 transition hover:bg-ember-300"
+                            >
+                                Parse Schedule
+                            </button>
+                            <span id="parse-indicator" class="htmx-indicator items-center gap-2 rounded-full bg-surf-300/20 px-3 py-1 text-xs font-semibold text-surf-300">
+                                <span class="h-2 w-2 animate-pulse rounded-full bg-surf-300"></span>
+                                Parsing...
+                            </span>
+                        </div>
+                        <div id="parse-result" class="hidden"></div>
+                    </form>
+
+                    <div class="my-5 flex items-center gap-3">
+                        <div class="h-px flex-1 bg-surf-300/25"></div>
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.22em] text-surf-300/70">Or</p>
+                        <div class="h-px flex-1 bg-surf-300/25"></div>
+                    </div>
+
+                    <form
+                        hx-post="/parse-image/"
+                        hx-target="#parse-result"
+                        hx-swap="none"
+                        hx-indicator="#parse-image-indicator"
+                        enctype="multipart/form-data"
+                        class="raised-card rounded-2xl border border-surf-300/25 bg-dusk-900/55 p-4"
+                    >
+                        {% csrf_token %}
+                        <label class="block text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
+                            Upload Schedule Screenshot
+                            <input
+                                type="file"
+                                name="schedule_image"
+                                accept="image/*"
+                                required
+                                class="mt-2 block w-full rounded-lg border border-surf-300/20 bg-slate-950/45 px-3 py-2 text-xs text-slate-200"
+                            >
+                        </label>
+                        <div class="mt-3 flex flex-wrap items-center gap-3">
+                            <button
+                                type="submit"
+                                class="mobile-full-btn rounded-xl bg-surf-400 px-4 py-2 text-xs font-bold uppercase tracking-wider text-dusk-900 transition hover:bg-surf-300"
+                            >
+                                Parse From Image
+                            </button>
+                            <span id="parse-image-indicator" class="htmx-indicator items-center gap-2 rounded-full bg-surf-300/20 px-3 py-1 text-xs font-semibold text-surf-300">
+                                <span class="h-2 w-2 animate-pulse rounded-full bg-surf-300"></span>
+                                Reading image...
+                            </span>
+                        </div>
+                        <p class="mt-2 text-[11px] text-slate-300">
+                            Supported: image files up to 5 MB.
+                        </p>
+                    </form>
+
+                    <template x-if="parseErrors.length">
+                        <div class="mt-4 rounded-2xl border border-ember-300/45 bg-ember-400/10 p-4">
+                            <h3 class="text-sm font-bold uppercase tracking-[0.16em] text-ember-300">Parse Notes</h3>
+                            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-200">
+                                <template x-for="(error, idx) in parseErrors" :key="idx">
+                                    <li x-text="error"></li>
+                                </template>
+                            </ul>
+                        </div>
+                    </template>
+                </section>
+
+                <section class="glass-panel surface-shine rounded-3xl p-5 md:p-6 slider-fade">
+                    <h2 class="font-display text-2xl font-bold text-white">2. Subject Colors</h2>
+                    <p class="mt-1 text-sm text-slate-300">Each parsed subject gets one block color for the wallpaper.</p>
+
+                    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <template x-for="(subject, index) in subjects" :key="subject.subject_no + '-' + index">
+                            <div class="raised-card rounded-2xl border border-surf-300/20 bg-dusk-900/45 p-4">
+                                <p class="font-semibold text-white" x-text="subject.subject_no"></p>
+                                <p class="text-xs text-slate-300" x-text="subject.title"></p>
+                                <label class="mt-3 flex items-center justify-between rounded-xl border border-surf-300/20 bg-slate-950/40 px-3 py-2 text-xs uppercase tracking-[0.15em] text-slate-300">
+                                    Color
+                                    <input
+                                        type="color"
+                                        :value="subject.color"
+                                        @input="updateSubjectColor(index, $event.target.value)"
+                                        class="h-8 w-12 cursor-pointer rounded-md border border-slate-300/30 bg-transparent"
+                                    >
+                                </label>
+                            </div>
+                        </template>
+                    </div>
+
+                    <template x-if="!subjects.length">
+                        <p class="mt-4 rounded-xl border border-dashed border-surf-300/30 bg-dusk-900/45 px-4 py-3 text-sm text-slate-300">
+                            Parse schedules first to unlock per-subject color controls.
+                        </p>
+                    </template>
+                </section>
+
+                <section class="glass-panel surface-shine rounded-3xl p-5 md:p-6 slider-fade">
+                    <h2 class="font-display text-2xl font-bold text-white">3. Background + Resolution</h2>
+                    <div class="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-2">
+                        <div class="raised-card rounded-2xl border border-surf-300/20 bg-dusk-900/45 p-4">
+                            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-surf-300">Background Mode</p>
+                            <div class="mt-3 grid grid-cols-3 gap-2">
+                                <button
+                                    type="button"
+                                    @click="background.type = 'solid'"
+                                    :class="background.type === 'solid' ? 'bg-surf-300 text-dusk-900' : 'bg-slate-900/60 text-slate-200'"
+                                    class="rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition"
+                                >
+                                    Solid
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="background.type = 'gradient'"
+                                    :class="background.type === 'gradient' ? 'bg-surf-300 text-dusk-900' : 'bg-slate-900/60 text-slate-200'"
+                                    class="rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition"
+                                >
+                                    Gradient
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="background.type = 'image'"
+                                    :class="background.type === 'image' ? 'bg-surf-300 text-dusk-900' : 'bg-slate-900/60 text-slate-200'"
+                                    class="rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition"
+                                >
+                                    Image
+                                </button>
+                            </div>
+
+                            <div class="mt-4" x-show="background.type === 'solid'">
+                                <label class="flex items-center justify-between rounded-xl border border-surf-300/20 bg-slate-950/50 px-3 py-2 text-xs uppercase tracking-[0.16em] text-slate-300">
+                                    Solid Color
+                                    <input type="color" :value="background.color" @input="updateBackground('color', $event.target.value)" class="h-8 w-12 cursor-pointer rounded-md border border-slate-300/30">
+                                </label>
+                            </div>
+
+                            <div class="mt-4 space-y-3" x-show="background.type === 'gradient'">
+                                <label class="flex items-center justify-between rounded-xl border border-surf-300/20 bg-slate-950/50 px-3 py-2 text-xs uppercase tracking-[0.16em] text-slate-300">
+                                    Gradient Top
+                                    <input type="color" :value="background.gradientFrom" @input="updateBackground('gradientFrom', $event.target.value)" class="h-8 w-12 cursor-pointer rounded-md border border-slate-300/30">
+                                </label>
+                                <label class="flex items-center justify-between rounded-xl border border-surf-300/20 bg-slate-950/50 px-3 py-2 text-xs uppercase tracking-[0.16em] text-slate-300">
+                                    Gradient Bottom
+                                    <input type="color" :value="background.gradientTo" @input="updateBackground('gradientTo', $event.target.value)" class="h-8 w-12 cursor-pointer rounded-md border border-slate-300/30">
+                                </label>
+                            </div>
+
+                            <div class="mt-4" x-show="background.type === 'image'">
+                                <label class="block rounded-xl border border-surf-300/25 bg-slate-950/45 px-3 py-3 text-xs uppercase tracking-[0.15em] text-slate-300">
+                                    Upload Background Photo
+                                    <input type="file" accept="image/*" @change="loadBackgroundImage($event)" class="mt-2 block w-full text-xs text-slate-200">
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="raised-card rounded-2xl border border-surf-300/20 bg-dusk-900/45 p-4">
+                            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-surf-300">Wallpaper Resolution</p>
+                            <label class="mt-3 block space-y-1 text-sm">
+                                <span class="text-xs uppercase tracking-[0.14em] text-slate-300">Preset</span>
+                                <select
+                                    x-model="selectedResolution"
+                                    @change="applyResolutionPreset()"
+                                    class="w-full rounded-xl border border-surf-300/25 bg-slate-950/50 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-surf-300"
+                                >
+                                    <option value="1080x2400">1080 x 2400</option>
+                                    <option value="1170x2532">1170 x 2532</option>
+                                    <option value="1284x2778">1284 x 2778</option>
+                                    <option value="auto">Auto Detect (window.screen)</option>
+                                </select>
+                            </label>
+
+                            <p class="mt-3 text-xs text-slate-300">
+                                Active canvas size: <span class="font-semibold text-white" x-text="resolution.width + ' x ' + resolution.height"></span>
+                            </p>
+
+                            <label class="mt-4 block space-y-1 text-sm">
+                                <span class="text-xs uppercase tracking-[0.14em] text-slate-300">Reference Week Start (for ICS)</span>
+                                <input
+                                    type="date"
+                                    x-model="referenceWeekStart"
+                                    class="w-full rounded-xl border border-surf-300/25 bg-slate-950/50 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-surf-300"
+                                >
+                            </label>
+
+                            <p class="mt-3 text-xs text-slate-300">ICS export repeats weekly for 18 occurrences per event.</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="space-y-6">
+                <section class="glass-panel surface-shine rounded-3xl p-5 md:p-6 slider-fade">
+                    <h2 class="font-display text-2xl font-bold text-white">4. Live Wallpaper Preview</h2>
+                    <p class="mt-1 text-sm text-slate-300">Canvas redraws automatically whenever schedules, colors, background, or resolution changes.</p>
+
+                    <div class="raised-card mt-5 rounded-3xl border border-surf-300/25 bg-slate-950/45 p-3 md:p-4">
+                        <canvas id="wallpaper-canvas" class="mx-auto w-full max-w-md rounded-2xl border border-slate-200/25 bg-slate-950/30 shadow-2xl"></canvas>
+                    </div>
+                </section>
+
+                <section class="glass-panel surface-shine rounded-3xl p-5 md:p-6 slider-fade">
+                    <h2 class="font-display text-2xl font-bold text-white">5. Export</h2>
+                    <div class="mt-4 grid grid-cols-1 gap-3">
+                        <button
+                            type="button"
+                            @click="downloadWallpaper()"
+                            class="mobile-full-btn rounded-xl bg-surf-400 px-4 py-3 text-sm font-bold text-dusk-900 transition hover:bg-surf-300"
+                        >
+                            Download Wallpaper (PNG)
+                        </button>
+                        <button
+                            type="button"
+                            @click="exportCalendar()"
+                            :disabled="!subjects.length || !referenceWeekStart"
+                            class="mobile-full-btn rounded-xl bg-ember-400 px-4 py-3 text-sm font-bold text-dusk-900 transition hover:bg-ember-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Export To Calendar (.ics)
+                        </button>
+                    </div>
+
+                    <p class="mt-4 text-xs text-slate-300">
+                        Tip: Parse first, tweak colors and background, then export both wallpaper and calendar.
+                    </p>
+                </section>
+            </div>
+        </div>
+
+        <div class="hidden" x-effect="JSON.stringify(subjects); JSON.stringify(background); resolution.width; resolution.height; scheduleRedraw()"></div>
+    </div>
+
+    <script src="{% static 'js/canvas_renderer.js' %}"></script>
+    <script>
+        function getCookie(name) {
+            const value = '; ' + document.cookie;
+            const parts = value.split('; ' + name + '=');
+            if (parts.length === 2) {
+                return parts.pop().split(';').shift();
+            }
+            return null;
+        }
+
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('scheduleApp', () => ({
+                rows: [
+                    { id: 1, subject_no: '', title: '', raw_schedule: '' },
+                ],
+                nextRowId: 2,
+                parseErrors: [],
+                subjects: [],
+                background: {
+                    type: 'solid',
+                    color: '#0f172a',
+                    gradientFrom: '#0b2542',
+                    gradientTo: '#173a55',
+                    imageData: null,
+                },
+                resolution: { width: 1080, height: 2400 },
+                selectedResolution: '1080x2400',
+                referenceWeekStart: '',
+                uiTheme: 'night',
+
+                init() {
+                    this.uiTheme = this.resolveInitialTheme();
+                    this.applyTheme(this.uiTheme);
+                    this.referenceWeekStart = this.getCurrentWeekMonday();
+                    this.scheduleRedraw();
+                },
+
+                addRow() {
+                    this.rows.push({
+                        id: this.nextRowId,
+                        subject_no: '',
+                        title: '',
+                        raw_schedule: '',
+                    });
+                    this.nextRowId += 1;
+                },
+
+                removeRow(index) {
+                    if (this.rows.length === 1) {
+                        this.rows[0] = { id: this.rows[0].id, subject_no: '', title: '', raw_schedule: '' };
+                        return;
+                    }
+                    this.rows.splice(index, 1);
+                },
+
+                handleScheduleLoaded(event) {
+                    const payload = event.detail || {};
+                    const parsedSubjects = Array.isArray(payload.subjects) ? payload.subjects : [];
+
+                    this.parseErrors = Array.isArray(payload.errors) ? payload.errors : [];
+                    this.subjects = parsedSubjects.map((subject, index) => ({
+                        subject_no: subject.subject_no || '',
+                        title: subject.title || '',
+                        color: subject.color || this.defaultColor(index),
+                        slots: Array.isArray(subject.slots) ? subject.slots : [],
+                    }));
+                },
+
+                defaultColor(index) {
+                    const palette = ['#1D4ED8', '#0F766E', '#B45309', '#BE123C', '#166534', '#334155', '#7C2D12', '#0E7490'];
+                    return palette[index % palette.length];
+                },
+
+                updateSubjectColor(index, color) {
+                    if (!this.subjects[index]) {
+                        return;
+                    }
+                    this.subjects[index].color = color;
+                },
+
+                updateBackground(key, value) {
+                    this.background[key] = value;
+                },
+
+                resolveInitialTheme() {
+                    const saved = window.localStorage.getItem('addsched-theme');
+                    if (saved === 'day' || saved === 'night') {
+                        return saved;
+                    }
+                    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'night' : 'day';
+                },
+
+                setTheme(theme) {
+                    if (theme !== 'day' && theme !== 'night') {
+                        return;
+                    }
+                    this.uiTheme = theme;
+                    this.applyTheme(theme);
+                    window.localStorage.setItem('addsched-theme', theme);
+                },
+
+                applyTheme(theme) {
+                    document.documentElement.setAttribute('data-theme', theme);
+                },
+
+                async loadBackgroundImage(event) {
+                    const file = event.target.files && event.target.files[0];
+                    if (!file) {
+                        return;
+                    }
+
+                    const dataUrl = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = () => reject(new Error('Failed to read image file.'));
+                        reader.readAsDataURL(file);
+                    });
+
+                    this.background.imageData = dataUrl;
+                    this.background.type = 'image';
+                },
+
+                applyResolutionPreset() {
+                    if (this.selectedResolution === 'auto') {
+                        const screenWidth = window.screen.width || 1080;
+                        const screenHeight = window.screen.height || 2400;
+                        this.resolution.width = Math.min(screenWidth, screenHeight);
+                        this.resolution.height = Math.max(screenWidth, screenHeight);
+                        return;
+                    }
+
+                    const [widthText, heightText] = this.selectedResolution.split('x');
+                    const width = Number(widthText);
+                    const height = Number(heightText);
+                    if (Number.isFinite(width) && Number.isFinite(height)) {
+                        this.resolution.width = width;
+                        this.resolution.height = height;
+                    }
+                },
+
+                scheduleRedraw() {
+                    if (!window.AdDSchedCanvas || typeof window.AdDSchedCanvas.drawWallpaper !== 'function') {
+                        return;
+                    }
+                    window.AdDSchedCanvas.drawWallpaper(this.subjects, this.background, this.resolution);
+                },
+
+                downloadWallpaper() {
+                    if (!window.AdDSchedCanvas || typeof window.AdDSchedCanvas.downloadWallpaper !== 'function') {
+                        return;
+                    }
+                    window.AdDSchedCanvas.downloadWallpaper('addsched-wallpaper.png');
+                },
+
+                async exportCalendar() {
+                    if (!this.subjects.length || !this.referenceWeekStart) {
+                        return;
+                    }
+
+                    const csrfToken = getCookie('csrftoken');
+                    const response = await fetch('/export-ics/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken || '',
+                        },
+                        body: JSON.stringify({
+                            subjects: this.subjects,
+                            reference_week_start: this.referenceWeekStart,
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        window.alert('Failed to export ICS: ' + errorText);
+                        return;
+                    }
+
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const anchor = document.createElement('a');
+                    anchor.href = url;
+                    anchor.download = 'addsched_schedule.ics';
+                    document.body.appendChild(anchor);
+                    anchor.click();
+                    anchor.remove();
+                    URL.revokeObjectURL(url);
+                },
+
+                getCurrentWeekMonday() {
+                    const now = new Date();
+                    const dayIndex = (now.getDay() + 6) % 7;
+                    now.setDate(now.getDate() - dayIndex);
+                    return now.toISOString().slice(0, 10);
+                },
+            }));
+        });
+    </script>
+</body>
+</html>
