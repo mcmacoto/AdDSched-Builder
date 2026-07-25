@@ -69,7 +69,8 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 STORAGES = {
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        # CompressedStaticFilesStorage eliminates missing manifest entry crashes
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
 
