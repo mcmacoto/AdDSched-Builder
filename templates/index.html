@@ -48,9 +48,8 @@
     <style>
         :root {
             --page-bg:
-                radial-gradient(1400px 700px at 8% -12%, rgba(80, 216, 255, 0.22), transparent 58%),
-                radial-gradient(900px 500px at 96% 0%, rgba(255, 139, 74, 0.18), transparent 62%),
-                linear-gradient(170deg, #07101a 0%, #0a1d2d 52%, #08131f 100%);
+                radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                #0a0f1a;
             --text-main: #e8f4ff;
             --text-muted: #b7cadb;
             --glass: rgba(8, 19, 31, 0.62);
@@ -65,9 +64,8 @@
 
         html[data-theme='day'] {
             --page-bg:
-                radial-gradient(1200px 650px at 12% -8%, rgba(255, 205, 144, 0.22), transparent 58%),
-                radial-gradient(900px 540px at 95% 2%, rgba(210, 164, 121, 0.18), transparent 60%),
-                linear-gradient(165deg, #fff8ee 0%, #f8ecda 52%, #f2e2cb 100%);
+                radial-gradient(circle, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+                #faf8f5;
             --text-main: #2f2417;
             --text-muted: #6d5a45;
             --glass: rgba(255, 246, 232, 0.88);
@@ -83,6 +81,7 @@
         body {
             font-family: Manrope, sans-serif;
             background: var(--page-bg);
+            background-size: 24px 24px, 100% 100%;
             color: var(--text-main);
             transition: background 220ms ease, color 220ms ease;
         }
@@ -359,7 +358,8 @@
                         <div class="mt-3 flex flex-wrap items-center gap-3">
                             <button
                                 type="submit"
-                                class="mobile-full-btn rounded-xl bg-surf-400 px-4 py-2 text-xs font-bold uppercase tracking-wider text-dusk-900 transition hover:bg-surf-300"
+                                :disabled="retryCountdown > 0"
+                                class="mobile-full-btn rounded-xl bg-surf-400 px-4 py-2 text-xs font-bold uppercase tracking-wider text-dusk-900 transition hover:bg-surf-300 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Parse From Image
                             </button>
@@ -372,6 +372,18 @@
                             Supported: image files up to 5 MB.
                         </p>
                     </form>
+
+                    <template x-if="rateLimited && retryCountdown > 0">
+                        <div class="mt-4 flex items-center gap-3 rounded-2xl border border-amber-400/45 bg-amber-400/10 p-4">
+                            <span class="animate-pulse text-amber-300 text-lg">⏳</span>
+                            <div>
+                                <p class="text-sm font-bold text-amber-300">API Rate Limit Reached</p>
+                                <p class="text-xs text-slate-200">
+                                    Please wait <span class="font-mono font-bold text-white" x-text="retryCountdown"></span> seconds before scanning another image.
+                                </p>
+                            </div>
+                        </div>
+                    </template>
 
                     <template x-if="parseErrors.length">
                         <div class="mt-4 rounded-2xl border border-ember-300/45 bg-ember-400/10 p-4">
@@ -453,6 +465,11 @@
                                 </label>
                             </div>
 
+                            <label class="mt-3 flex items-center justify-between rounded-xl border border-surf-300/20 bg-slate-950/50 px-3 py-2 text-xs uppercase tracking-[0.16em] text-slate-300 cursor-pointer">
+                                <span>Atmosphere Glow</span>
+                                <input type="checkbox" x-model="background.atmosphere" class="h-4 w-4 rounded accent-surf-400 cursor-pointer">
+                            </label>
+
                             <div class="mt-4 space-y-3" x-show="background.type === 'gradient'">
                                 <label class="flex items-center justify-between rounded-xl border border-surf-300/20 bg-slate-950/50 px-3 py-2 text-xs uppercase tracking-[0.16em] text-slate-300">
                                     Gradient Top
@@ -472,28 +489,40 @@
                             </div>
                         </div>
 
-                        <div class="raised-card rounded-2xl border border-surf-300/20 bg-dusk-900/45 p-4">
-                            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-surf-300">Wallpaper Resolution</p>
-                            <div class="mt-3 grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    @click="setPlatform('phone')"
-                                    :class="selectedPlatform === 'phone' ? 'bg-surf-300 text-dusk-900' : 'bg-slate-900/60 text-slate-200'"
-                                    class="rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition"
+                        <div class="raised-card rounded-2xl border border-surf-300/20 bg-dusk-900/45 p-4 space-y-3">
+                            <label class="block space-y-1 text-sm">
+                                <span class="text-xs font-semibold uppercase tracking-[0.16em] text-surf-300">Calendar Title (Optional)</span>
+                                <input
+                                    type="text"
+                                    x-model="calendarTitle"
+                                    placeholder="Class Schedule"
+                                    class="w-full rounded-xl border border-surf-300/25 bg-slate-950/50 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-surf-300"
                                 >
-                                    Phone
-                                </button>
-                                <button
-                                    type="button"
-                                    @click="setPlatform('desktop')"
-                                    :class="selectedPlatform === 'desktop' ? 'bg-surf-300 text-dusk-900' : 'bg-slate-900/60 text-slate-200'"
-                                    class="rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition"
-                                >
-                                    Desktop
-                                </button>
+                            </label>
+
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-surf-300">Wallpaper Resolution</p>
+                                <div class="mt-2 grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        @click="setPlatform('phone')"
+                                        :class="selectedPlatform === 'phone' ? 'bg-surf-300 text-dusk-900' : 'bg-slate-900/60 text-slate-200'"
+                                        class="rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition"
+                                    >
+                                        Phone
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="setPlatform('desktop')"
+                                        :class="selectedPlatform === 'desktop' ? 'bg-surf-300 text-dusk-900' : 'bg-slate-900/60 text-slate-200'"
+                                        class="rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition"
+                                    >
+                                        Desktop
+                                    </button>
+                                </div>
                             </div>
 
-                            <label class="mt-3 block space-y-1 text-sm">
+                            <label class="block space-y-1 text-sm">
                                 <span class="text-xs uppercase tracking-[0.14em] text-slate-300">Preset</span>
                                 <select
                                     x-model="selectedResolution"
@@ -507,11 +536,11 @@
                                 </select>
                             </label>
 
-                            <p class="mt-3 text-xs text-slate-300">
+                            <p class="text-xs text-slate-300">
                                 Active canvas size: <span class="font-semibold text-white" x-text="resolution.width + ' x ' + resolution.height"></span>
                             </p>
 
-                            <label class="mt-4 block space-y-1 text-sm">
+                            <label class="block space-y-1 text-sm">
                                 <span class="text-xs uppercase tracking-[0.14em] text-slate-300">Reference Week Start (for ICS)</span>
                                 <input
                                     type="date"
@@ -520,7 +549,7 @@
                                 >
                             </label>
 
-                            <p class="mt-3 text-xs text-slate-300">ICS export repeats weekly for 18 occurrences per event.</p>
+                            <p class="text-xs text-slate-300">ICS export repeats weekly for 18 occurrences per event.</p>
                         </div>
                     </div>
                 </section>
@@ -529,10 +558,16 @@
             <div class="space-y-6">
                 <section class="glass-panel surface-shine rounded-3xl p-5 md:p-6 slider-fade">
                     <h2 class="font-display text-2xl font-bold text-white">4. Live Wallpaper Preview</h2>
-                    <p class="mt-1 text-sm text-slate-300">Canvas redraws automatically whenever schedules, colors, background, or resolution changes.</p>
+                    <p class="mt-1 text-sm text-slate-300">Canvas redraws automatically. Click preview to view full size.</p>
 
-                    <div class="raised-card mt-5 w-full overflow-hidden rounded-3xl border border-surf-300/25 bg-slate-950/45 p-3 md:p-4">
-                        <canvas id="wallpaper-canvas" class="mx-auto block h-auto max-w-full rounded-2xl border border-slate-200/25 bg-slate-950/30 shadow-2xl" style="max-width: 100%; height: auto; display: block;"></canvas>
+                    <div
+                        @click="openFullPreview()"
+                        class="raised-card group relative mt-5 w-full cursor-pointer overflow-hidden rounded-3xl border border-surf-300/25 bg-slate-950/45 p-3 md:p-4 transition hover:border-surf-300/60"
+                    >
+                        <canvas id="wallpaper-canvas" class="mx-auto block h-auto max-w-full rounded-2xl border border-slate-200/25 bg-slate-950/30 shadow-2xl transition group-hover:scale-[1.01]" style="max-width: 100%; height: auto; display: block;"></canvas>
+                        <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 backdrop-blur-[2px] transition group-hover:opacity-100 rounded-3xl">
+                            <span class="rounded-xl bg-surf-400 px-4 py-2 text-xs font-bold uppercase tracking-wider text-dusk-900 shadow-lg">Click for Full Preview 🔍</span>
+                        </div>
                     </div>
                 </section>
 
@@ -563,7 +598,25 @@
             </div>
         </div>
 
-        <div class="hidden" x-effect="JSON.stringify(subjects); JSON.stringify(background); resolution.width; resolution.height; scheduleRedraw()"></div>
+        <template x-if="showPreviewModal">
+            <div
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm slider-fade"
+                @click.self="showPreviewModal = false"
+                @keydown.escape.window="showPreviewModal = false"
+            >
+                <div class="relative max-h-[92vh] max-w-[92vw] overflow-auto rounded-3xl border border-surf-300/30 bg-dusk-900/90 p-4 shadow-2xl">
+                    <button
+                        @click="showPreviewModal = false"
+                        class="absolute top-4 right-4 z-10 rounded-full bg-slate-800/80 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white hover:bg-slate-700 transition"
+                    >
+                        ✕ Close
+                    </button>
+                    <canvas id="preview-fullsize-canvas" class="mx-auto block rounded-2xl max-h-[82vh] w-auto h-auto shadow-2xl"></canvas>
+                </div>
+            </div>
+        </template>
+
+        <div class="hidden" x-effect="JSON.stringify(subjects); JSON.stringify(background); resolution.width; resolution.height; calendarTitle; scheduleRedraw()"></div>
     </div>
 
     <script src="{% static 'js/canvas_renderer.js' %}"></script>
@@ -585,12 +638,19 @@
                 nextRowId: 2,
                 parseErrors: [],
                 subjects: [],
+                calendarTitle: '',
+                showPreviewModal: false,
+                rateLimited: false,
+                retryAfterSeconds: 0,
+                retryCountdown: 0,
+                retryTimer: null,
                 background: {
                     type: 'solid',
                     color: '#0f172a',
                     gradientFrom: '#0b2542',
                     gradientTo: '#173a55',
                     imageData: null,
+                    atmosphere: true,
                 },
                 resolution: { width: 1080, height: 2400 },
                 selectedPlatform: 'phone',
@@ -640,12 +700,30 @@
                     const parsedSubjects = Array.isArray(payload.subjects) ? payload.subjects : [];
 
                     this.parseErrors = Array.isArray(payload.errors) ? payload.errors : [];
-                    this.subjects = parsedSubjects.map((subject, index) => ({
-                        subject_no: subject.subject_no || '',
-                        title: subject.title || '',
-                        color: subject.color || this.defaultColor(index),
-                        slots: Array.isArray(subject.slots) ? subject.slots : [],
-                    }));
+                    
+                    if (payload.rate_limited) {
+                        this.rateLimited = true;
+                        this.retryAfterSeconds = payload.retry_after_seconds || 60;
+                        this.retryCountdown = this.retryAfterSeconds;
+                        if (this.retryTimer) clearInterval(this.retryTimer);
+                        this.retryTimer = setInterval(() => {
+                            this.retryCountdown--;
+                            if (this.retryCountdown <= 0) {
+                                clearInterval(this.retryTimer);
+                                this.retryTimer = null;
+                                this.rateLimited = false;
+                            }
+                        }, 1000);
+                    }
+
+                    if (parsedSubjects.length > 0) {
+                        this.subjects = parsedSubjects.map((subject, index) => ({
+                            subject_no: subject.subject_no || '',
+                            title: subject.title || '',
+                            color: subject.color || this.defaultColor(index),
+                            slots: Array.isArray(subject.slots) ? subject.slots : [],
+                        }));
+                    }
                 },
 
                 defaultColor(index) {
@@ -793,7 +871,17 @@
                     if (!window.AdDSchedCanvas || typeof window.AdDSchedCanvas.drawWallpaper !== 'function') {
                         return;
                     }
-                    window.AdDSchedCanvas.drawWallpaper(this.subjects, this.background, this.resolution);
+                    window.AdDSchedCanvas.drawWallpaper(this.subjects, this.background, this.resolution, this.calendarTitle);
+                },
+
+                openFullPreview() {
+                    this.showPreviewModal = true;
+                    this.$nextTick(() => {
+                        const modalCanvas = document.getElementById('preview-fullsize-canvas');
+                        if (modalCanvas && window.AdDSchedCanvas && typeof window.AdDSchedCanvas.renderToCanvas === 'function') {
+                            window.AdDSchedCanvas.renderToCanvas(modalCanvas, this.subjects, this.background, this.resolution, this.calendarTitle);
+                        }
+                    });
                 },
 
                 downloadWallpaper() {

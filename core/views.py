@@ -10,6 +10,8 @@ from django.views.decorators.http import require_POST
 from .ical import build_ics_bytes
 from .parser import parse_schedule_string, parse_subject_rows
 
+import hashlib
+
 DEFAULT_COLORS = [
     "#1D4ED8",
     "#0F766E",
@@ -29,17 +31,28 @@ IMAGE_PROMPT = (
     "If no classes are visible, return an empty JSON array []."
 )
 
+IMAGE_CACHE: dict[str, list[dict[str, str]]] = {}
+CACHE_MAX_SIZE = 50
 
-def schedule_response(subjects: list[dict[str, Any]], errors: list[str], status: int = 200) -> JsonResponse:
+
+def schedule_response(
+    subjects: list[dict[str, Any]],
+    errors: list[str],
+    status: int = 200,
+    rate_limited: bool = False,
+    retry_after_seconds: int = 0,
+) -> JsonResponse:
     colored_subjects: list[dict[str, Any]] = []
     for index, subject in enumerate(subjects):
         normalized_subject = dict(subject)
         normalized_subject["color"] = subject.get("color") or DEFAULT_COLORS[index % len(DEFAULT_COLORS)]
         colored_subjects.append(normalized_subject)
 
-    payload = {
+    payload: dict[str, Any] = {
         "subjects": colored_subjects,
         "errors": errors,
+        "rate_limited": rate_limited,
+        "retry_after_seconds": retry_after_seconds,
     }
     response = JsonResponse(payload, status=status)
     response["HX-Trigger"] = json.dumps({"schedule-loaded": payload})
@@ -206,35 +219,55 @@ def parse_image(request: HttpRequest) -> JsonResponse:
     if not settings.GEMINI_API_KEY:
         return schedule_response([], ["GEMINI_API_KEY is not configured on the server."], status=500)
 
-    try:
-        encoded_image = base64.b64encode(image_bytes).decode("utf-8")
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash")
+    image_hash = hashlib.sha256(image_bytes).hexdigest()
+    if image_hash in IMAGE_CACHE:
+        rows = IMAGE_CACHE[image_hash]
+    else:
+        try:
+            encoded_image = base64.b64encode(image_bytes).decode("utf-8")
+            genai.configure(api_key=settings.GEMINI_API_KEY)
+            model = genai.GenerativeModel(
+                "gemini-2.5-flash",
+                generation_config={"temperature": 0.0},
+            )
 
-        response = model.generate_content(
-            [
-                {
-                    "role": "user",
-                    "parts": [
-                        {"text": IMAGE_PROMPT},
-                        {
-                            "inline_data": {
-                                "mime_type": content_type,
-                                "data": encoded_image,
-                            }
-                        },
-                    ],
-                }
-            ]
-        )
+            response = model.generate_content(
+                [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"text": IMAGE_PROMPT},
+                            {
+                                "inline_data": {
+                                    "mime_type": content_type,
+                                    "data": encoded_image,
+                                }
+                            },
+                        ],
+                    }
+                ]
+            )
 
-        model_text = extract_model_text(response)
-        model_data = parse_json_text(model_text)
-        rows = normalize_rows_from_model(model_data)
-    except ValueError as exc:
-        return schedule_response([], [str(exc)], status=400)
-    except Exception as exc:
-        return schedule_response([], [f"Failed to process image with Gemini: {exc}"], status=502)
+            model_text = extract_model_text(response)
+            model_data = parse_json_text(model_text)
+            rows = normalize_rows_from_model(model_data)
+
+            if len(IMAGE_CACHE) >= CACHE_MAX_SIZE:
+                IMAGE_CACHE.pop(next(iter(IMAGE_CACHE)))
+            IMAGE_CACHE[image_hash] = rows
+        except ValueError as exc:
+            return schedule_response([], [str(exc)], status=400)
+        except Exception as exc:
+            exc_str = str(exc)
+            if "429" in exc_str or "ResourceExhausted" in exc_str or "quota" in exc_str.lower():
+                return schedule_response(
+                    [],
+                    ["Gemini API rate limit reached. Please wait ~60 seconds before scanning another image."],
+                    status=429,
+                    rate_limited=True,
+                    retry_after_seconds=60,
+                )
+            return schedule_response([], [f"Failed to process image with Gemini: {exc}"], status=502)
 
     subjects: list[dict[str, Any]] = []
     errors: list[str] = []

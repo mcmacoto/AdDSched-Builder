@@ -396,13 +396,14 @@
         ctx.fillRect(0, 0, logicalWidth, logicalHeight);
     }
 
-    function drawHeader(ctx, layout) {
+    function drawHeader(ctx, layout, title) {
         ctx.save();
         ctx.fillStyle = 'rgba(248, 252, 255, 0.95)';
         ctx.font = `800 ${layout.fontSize.headerTitle}px Bricolage Grotesque`;
-        ctx.textAlign = 'left';
+        ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('CLASS SCHEDULE', layout.blockPadding * 0.65, layout.titleHeaderHeight * 0.52);
+        const displayTitle = (title && String(title).trim()) ? String(title).trim() : 'CLASS SCHEDULE';
+        ctx.fillText(displayTitle.toUpperCase(), layout.logicalWidth / 2, layout.titleHeaderHeight * 0.52);
         ctx.restore();
     }
 
@@ -616,14 +617,16 @@
         }
     }
 
-    function renderWallpaperScene(ctx, logicalWidth, logicalHeight, subjects, background, redraw) {
+    function renderWallpaperScene(ctx, logicalWidth, logicalHeight, subjects, background, redraw, title) {
         drawBackground(ctx, logicalWidth, logicalHeight, background, redraw);
-        drawAtmosphere(ctx, logicalWidth, logicalHeight);
+        if (!background || background.atmosphere !== false) {
+            drawAtmosphere(ctx, logicalWidth, logicalHeight);
+        }
 
         const bounds = computeTimeBounds(subjects);
         const layout = buildLayout(logicalWidth, logicalHeight, bounds);
 
-        drawHeader(ctx, layout);
+        drawHeader(ctx, layout, title);
         drawGrid(ctx, layout, bounds);
         drawSlotBlocks(ctx, layout, bounds, subjects);
         drawFooter(ctx, layout);
@@ -658,7 +661,7 @@
         return ctx;
     }
 
-    function drawWallpaper(subjects, background, resolution) {
+    function drawWallpaper(subjects, background, resolution, title) {
         const canvas = document.getElementById(CANVAS_ID);
         if (!canvas) {
             return;
@@ -673,6 +676,7 @@
             subjects: safeSubjects,
             background: safeBackground,
             resolution: { width, height },
+            title: title || 'CLASS SCHEDULE',
         };
 
         const ctx = configurePreviewContext(canvas, width, height);
@@ -681,8 +685,20 @@
         }
 
         renderWallpaperScene(ctx, width, height, safeSubjects, safeBackground, function () {
-            drawWallpaper(rendererState.subjects, rendererState.background, rendererState.resolution);
-        });
+            drawWallpaper(rendererState.subjects, rendererState.background, rendererState.resolution, rendererState.title);
+        }, rendererState.title);
+    }
+
+    function renderToCanvas(canvas, subjects, background, resolution, title) {
+        if (!canvas) return;
+        const width = Number(resolution && resolution.width) || DEFAULT_RESOLUTION.width;
+        const height = Number(resolution && resolution.height) || DEFAULT_RESOLUTION.height;
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        renderWallpaperScene(ctx, width, height, subjects || [], background || DEFAULT_BACKGROUND, null, title || 'CLASS SCHEDULE');
     }
 
     function downloadWallpaper(filename) {
@@ -704,7 +720,8 @@
             height,
             rendererState.subjects || [],
             rendererState.background || DEFAULT_BACKGROUND,
-            null
+            null,
+            rendererState.title || 'CLASS SCHEDULE'
         );
 
         const link = document.createElement('a');
@@ -715,6 +732,7 @@
 
     window.AdDSchedCanvas = {
         drawWallpaper,
+        renderToCanvas,
         downloadWallpaper,
     };
 
