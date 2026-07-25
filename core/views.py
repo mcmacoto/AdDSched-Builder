@@ -1,16 +1,16 @@
 import base64
+import hashlib
 import json
 from typing import Any
 
-import google.generativeai as genai
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
+from google import genai
+from google.genai import types
 
 from .ical import build_ics_bytes
 from .parser import parse_schedule_string, parse_subject_rows
-
-import hashlib
 
 DEFAULT_COLORS = [
     "#1D4ED8",
@@ -224,28 +224,19 @@ def parse_image(request: HttpRequest) -> JsonResponse:
         rows = IMAGE_CACHE[image_hash]
     else:
         try:
-            encoded_image = base64.b64encode(image_bytes).decode("utf-8")
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            model = genai.GenerativeModel(
-                "gemini-2.5-flash",
-                generation_config={"temperature": 0.0},
-            )
-
-            response = model.generate_content(
-                [
-                    {
-                        "role": "user",
-                        "parts": [
-                            {"text": IMAGE_PROMPT},
-                            {
-                                "inline_data": {
-                                    "mime_type": content_type,
-                                    "data": encoded_image,
-                                }
-                            },
-                        ],
-                    }
-                ]
+            client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[
+                    types.Part.from_bytes(
+                        data=image_bytes,
+                        mime_type=content_type,
+                    ),
+                    IMAGE_PROMPT,
+                ],
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                ),
             )
 
             model_text = extract_model_text(response)
