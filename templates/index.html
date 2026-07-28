@@ -11,37 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        display: ['Bricolage Grotesque', 'sans-serif'],
-                        body: ['Manrope', 'sans-serif'],
-                    },
-                    colors: {
-                        dusk: {
-                            900: '#08131f',
-                            800: '#0f2235',
-                            700: '#15304a',
-                        },
-                        surf: {
-                            400: '#50d8ff',
-                            300: '#7be3ff',
-                        },
-                        ember: {
-                            400: '#ff8b4a',
-                            300: '#ffac7a',
-                        },
-                    },
-                    boxShadow: {
-                        glow: '0 16px 50px rgba(80, 216, 255, 0.22)',
-                    },
-                },
-            },
-        }
-    </script>
+    <link rel="stylesheet" href="{% static 'css/tailwind-built.css' %}">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
