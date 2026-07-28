@@ -273,8 +273,33 @@
         return usedHeight;
     }
 
-    function buildLayout(logicalWidth, logicalHeight, bounds) {
-        const activeDays = DAY_ORDER;
+    function computeActiveDays(subjects, hideEmptyDays) {
+        if (!hideEmptyDays) {
+            return DAY_ORDER;
+        }
+
+        const activeSet = new Set();
+        const safeSubjects = Array.isArray(subjects) ? subjects : [];
+
+        for (const subject of safeSubjects) {
+            const slots = Array.isArray(subject.slots) ? subject.slots : [];
+            for (const slot of slots) {
+                const days = Array.isArray(slot.days) ? slot.days : [];
+                for (const rawDay of days) {
+                    const day = normalizeDay(rawDay);
+                    if (day) {
+                        activeSet.add(day);
+                    }
+                }
+            }
+        }
+
+        const filtered = DAY_ORDER.filter((day) => activeSet.has(day));
+        return filtered.length > 0 ? filtered : DAY_ORDER;
+    }
+
+    function buildLayout(logicalWidth, logicalHeight, bounds, subjects, hideEmptyDays) {
+        const activeDays = computeActiveDays(subjects, hideEmptyDays);
         const totalTimeSlots = Math.max(1, Math.round((bounds.max - bounds.min) / 30));
 
         const isLandscape = logicalWidth >= logicalHeight;
@@ -520,8 +545,8 @@
 
                 for (const rawDay of days) {
                     const day = normalizeDay(rawDay);
-                    const dayIndex = day ? DAY_TO_INDEX[day] : undefined;
-                    if (dayIndex === undefined) {
+                    const dayIndex = day ? layout.activeDays.indexOf(day) : -1;
+                    if (dayIndex === -1) {
                         continue;
                     }
 
@@ -617,14 +642,14 @@
         }
     }
 
-    function renderWallpaperScene(ctx, logicalWidth, logicalHeight, subjects, background, redraw, title) {
+    function renderWallpaperScene(ctx, logicalWidth, logicalHeight, subjects, background, redraw, title, hideEmptyDays) {
         drawBackground(ctx, logicalWidth, logicalHeight, background, redraw);
         if (!background || background.atmosphere !== false) {
             drawAtmosphere(ctx, logicalWidth, logicalHeight);
         }
 
         const bounds = computeTimeBounds(subjects);
-        const layout = buildLayout(logicalWidth, logicalHeight, bounds);
+        const layout = buildLayout(logicalWidth, logicalHeight, bounds, subjects, hideEmptyDays);
 
         drawHeader(ctx, layout, title);
         drawGrid(ctx, layout, bounds);
@@ -661,7 +686,7 @@
         return ctx;
     }
 
-    function drawWallpaper(subjects, background, resolution, title) {
+    function drawWallpaper(subjects, background, resolution, title, hideEmptyDays) {
         const canvas = document.getElementById(CANVAS_ID);
         if (!canvas) {
             return;
@@ -677,6 +702,7 @@
             background: safeBackground,
             resolution: { width, height },
             title: title || 'CLASS SCHEDULE',
+            hideEmptyDays: !!hideEmptyDays,
         };
 
         const ctx = configurePreviewContext(canvas, width, height);
@@ -685,11 +711,11 @@
         }
 
         renderWallpaperScene(ctx, width, height, safeSubjects, safeBackground, function () {
-            drawWallpaper(rendererState.subjects, rendererState.background, rendererState.resolution, rendererState.title);
-        }, rendererState.title);
+            drawWallpaper(rendererState.subjects, rendererState.background, rendererState.resolution, rendererState.title, rendererState.hideEmptyDays);
+        }, rendererState.title, !!hideEmptyDays);
     }
 
-    function renderToCanvas(canvas, subjects, background, resolution, title) {
+    function renderToCanvas(canvas, subjects, background, resolution, title, hideEmptyDays) {
         if (!canvas) return;
         const width = Number(resolution && resolution.width) || DEFAULT_RESOLUTION.width;
         const height = Number(resolution && resolution.height) || DEFAULT_RESOLUTION.height;
@@ -698,7 +724,7 @@
 
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-        renderWallpaperScene(ctx, width, height, subjects || [], background || DEFAULT_BACKGROUND, null, title || 'CLASS SCHEDULE');
+        renderWallpaperScene(ctx, width, height, subjects || [], background || DEFAULT_BACKGROUND, null, title || 'CLASS SCHEDULE', !!hideEmptyDays);
     }
 
     function downloadWallpaper(filename) {
@@ -721,7 +747,8 @@
             rendererState.subjects || [],
             rendererState.background || DEFAULT_BACKGROUND,
             null,
-            rendererState.title || 'CLASS SCHEDULE'
+            rendererState.title || 'CLASS SCHEDULE',
+            !!rendererState.hideEmptyDays
         );
 
         const link = document.createElement('a');

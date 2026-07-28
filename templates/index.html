@@ -520,6 +520,21 @@
                             </label>
 
                             <p class="text-xs text-slate-300">ICS export repeats weekly for 18 occurrences per event.</p>
+
+                            <template x-if="hasEmptyDays()">
+                                <div class="mt-4 raised-card rounded-2xl border border-surf-300/20 bg-dusk-900/45 p-4 slider-fade">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-surf-300">Schedule Layout</p>
+                                            <p class="text-xs text-slate-300 mt-0.5">Hide columns for days with no classes</p>
+                                        </div>
+                                        <label class="relative inline-flex cursor-pointer items-center">
+                                            <input type="checkbox" x-model="hideEmptyDays" class="peer sr-only">
+                                            <div class="peer h-6 w-11 rounded-full bg-slate-800 after:absolute after:top-0.5 after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-surf-400 peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </section>
@@ -646,7 +661,7 @@
             </div>
         </template>
 
-        <div class="hidden" x-effect="JSON.stringify(subjects); JSON.stringify(background); resolution.width; resolution.height; calendarTitle; scheduleRedraw()"></div>
+        <div class="hidden" x-effect="JSON.stringify(subjects); JSON.stringify(background); resolution.width; resolution.height; calendarTitle; hideEmptyDays; scheduleRedraw()"></div>
     </div>
 
     <script src="{% static 'js/canvas_renderer.js' %}"></script>
@@ -698,6 +713,7 @@
                 ],
                 referenceWeekStart: '',
                 uiTheme: 'night',
+                hideEmptyDays: false,
                 cropModal: {
                     show: false,
                     fullImageData: null,
@@ -1168,11 +1184,34 @@
                     }
                 },
 
+                hasEmptyDays() {
+                    if (!this.subjects || !this.subjects.length) {
+                        return false;
+                    }
+                    const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    const activeSet = new Set();
+                    for (const subject of this.subjects) {
+                        const slots = Array.isArray(subject.slots) ? subject.slots : [];
+                        for (const slot of slots) {
+                            const days = Array.isArray(slot.days) ? slot.days : [];
+                            for (const rawDay of days) {
+                                const key = String(rawDay || '').trim().toLowerCase();
+                                const map = { monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday' };
+                                const normalized = map[key];
+                                if (normalized) {
+                                    activeSet.add(normalized);
+                                }
+                            }
+                        }
+                    }
+                    return dayOrder.some((day) => !activeSet.has(day));
+                },
+
                 scheduleRedraw() {
                     if (!window.AdDSchedCanvas || typeof window.AdDSchedCanvas.drawWallpaper !== 'function') {
                         return;
                     }
-                    window.AdDSchedCanvas.drawWallpaper(this.subjects, this.background, this.resolution, this.calendarTitle);
+                    window.AdDSchedCanvas.drawWallpaper(this.subjects, this.background, this.resolution, this.calendarTitle, this.hideEmptyDays);
                 },
 
                 openFullPreview() {
@@ -1180,7 +1219,7 @@
                     this.$nextTick(() => {
                         const modalCanvas = document.getElementById('preview-fullsize-canvas');
                         if (modalCanvas && window.AdDSchedCanvas && typeof window.AdDSchedCanvas.renderToCanvas === 'function') {
-                            window.AdDSchedCanvas.renderToCanvas(modalCanvas, this.subjects, this.background, this.resolution, this.calendarTitle);
+                            window.AdDSchedCanvas.renderToCanvas(modalCanvas, this.subjects, this.background, this.resolution, this.calendarTitle, this.hideEmptyDays);
                         }
                     });
                 },
