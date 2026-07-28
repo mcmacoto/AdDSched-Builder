@@ -586,6 +586,66 @@
             </div>
         </template>
 
+        <template x-if="cropModal.show">
+            <div
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm slider-fade"
+                @keydown.escape.window="cancelCrop()"
+            >
+                <div class="relative max-h-[92vh] max-w-[92vw] overflow-auto rounded-3xl border border-surf-300/30 bg-dusk-900/95 p-5 shadow-2xl flex flex-col items-center">
+                    <div class="mb-4 flex w-full items-center justify-between gap-4">
+                        <div>
+                            <h3 class="font-display text-xl font-bold text-white">Crop Background Image</h3>
+                            <p class="text-xs text-slate-300">Drag inside crop area to move, or drag white corner handles to resize</p>
+                        </div>
+                        <button
+                            @click="cancelCrop()"
+                            class="rounded-full bg-slate-800/80 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white hover:bg-slate-700 transition"
+                        >
+                            ✕ Cancel
+                        </button>
+                    </div>
+
+                    <div class="relative overflow-hidden rounded-2xl border border-surf-300/30 bg-black touch-none">
+                        <canvas
+                            id="crop-canvas"
+                            class="cursor-crosshair block"
+                            @mousedown="handleCropPointerDown($event)"
+                            @mousemove="handleCropPointerMove($event)"
+                            @mouseup="handleCropPointerUp()"
+                            @mouseleave="handleCropPointerUp()"
+                            @touchstart.prevent="handleCropPointerDown($event)"
+                            @touchmove.prevent="handleCropPointerMove($event)"
+                            @touchend="handleCropPointerUp()"
+                        ></canvas>
+                    </div>
+
+                    <div class="mt-5 flex flex-wrap items-center justify-center gap-3 w-full">
+                        <button
+                            type="button"
+                            @click="applyCrop()"
+                            class="rounded-xl bg-surf-400 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-dusk-900 transition hover:bg-surf-300"
+                        >
+                            Apply Crop
+                        </button>
+                        <button
+                            type="button"
+                            @click="useFullImage()"
+                            class="rounded-xl bg-slate-800 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-slate-700"
+                        >
+                            Use Full Image
+                        </button>
+                        <button
+                            type="button"
+                            @click="cancelCrop()"
+                            class="rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-300 transition hover:bg-slate-800"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+
         <div class="hidden" x-effect="JSON.stringify(subjects); JSON.stringify(background); resolution.width; resolution.height; calendarTitle; scheduleRedraw()"></div>
     </div>
 
@@ -638,6 +698,21 @@
                 ],
                 referenceWeekStart: '',
                 uiTheme: 'night',
+                cropModal: {
+                    show: false,
+                    fullImageData: null,
+                    imgWidth: 0,
+                    imgHeight: 0,
+                    cropX: 0,
+                    cropY: 0,
+                    cropW: 0,
+                    cropH: 0,
+                    isDragging: false,
+                    dragHandle: null,
+                    startX: 0,
+                    startY: 0,
+                    initialCrop: null,
+                },
 
                 init() {
                     this.uiTheme = this.resolveInitialTheme();
@@ -668,6 +743,7 @@
                 handleScheduleLoaded(event) {
                     const payload = event.detail || {};
                     const parsedSubjects = Array.isArray(payload.subjects) ? payload.subjects : [];
+                    const rawRows = Array.isArray(payload.raw_rows) ? payload.raw_rows : [];
 
                     this.parseErrors = Array.isArray(payload.errors) ? payload.errors : [];
                     
@@ -684,6 +760,16 @@
                                 this.rateLimited = false;
                             }
                         }, 1000);
+                    }
+
+                    if (rawRows.length > 0) {
+                        this.rows = rawRows.map((row, index) => ({
+                            id: this.nextRowId + index,
+                            subject_no: row.subject_no || '',
+                            title: row.title || '',
+                            raw_schedule: row.raw_schedule || '',
+                        }));
+                        this.nextRowId += rawRows.length;
                     }
 
                     if (parsedSubjects.length > 0) {
@@ -746,8 +832,253 @@
                         reader.readAsDataURL(file);
                     });
 
-                    this.background.imageData = dataUrl;
+                    const img = new Image();
+                    img.onload = () => {
+                        this.cropModal.fullImageData = dataUrl;
+                        this.cropModal.imgWidth = img.naturalWidth;
+                        this.cropModal.imgHeight = img.naturalHeight;
+                        this.initCropRegion();
+                        this.cropModal.show = true;
+                        this.$nextTick(() => this.renderCropCanvas());
+                    };
+                    img.src = dataUrl;
+                    event.target.value = '';
+                },
+
+                initCropRegion() {
+                    const targetAspect = (this.resolution.width || 1080) / (this.resolution.height || 2400);
+                    const imgW = this.cropModal.imgWidth;
+                    const imgH = this.cropModal.imgHeight;
+
+                    let cropW, cropH;
+                    if (imgW / imgH > targetAspect) {
+                        cropH = imgH;
+                        cropW = Math.round(imgH * targetAspect);
+                    } else {
+                        cropW = imgW;
+                        cropH = Math.round(imgW / targetAspect);
+                    }
+
+                    this.cropModal.cropX = Math.round((imgW - cropW) / 2);
+                    this.cropModal.cropY = Math.round((imgH - cropH) / 2);
+                    this.cropModal.cropW = cropW;
+                    this.cropModal.cropH = cropH;
+                },
+
+                renderCropCanvas() {
+                    const canvas = document.getElementById('crop-canvas');
+                    if (!canvas || !this.cropModal.fullImageData) return;
+
+                    const ctx = canvas.getContext('2d');
+                    const img = new Image();
+                    img.onload = () => {
+                        const maxW = Math.min(window.innerWidth * 0.8, 640);
+                        const maxH = Math.min(window.innerHeight * 0.55, 480);
+
+                        const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+                        const displayW = Math.round(img.naturalWidth * scale);
+                        const displayH = Math.round(img.naturalHeight * scale);
+
+                        canvas.width = displayW;
+                        canvas.height = displayH;
+
+                        ctx.drawImage(img, 0, 0, displayW, displayH);
+
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                        ctx.fillRect(0, 0, displayW, displayH);
+
+                        const cX = (this.cropModal.cropX / img.naturalWidth) * displayW;
+                        const cY = (this.cropModal.cropY / img.naturalHeight) * displayH;
+                        const cW = (this.cropModal.cropW / img.naturalWidth) * displayW;
+                        const cH = (this.cropModal.cropH / img.naturalHeight) * displayH;
+
+                        ctx.drawImage(img, this.cropModal.cropX, this.cropModal.cropY, this.cropModal.cropW, this.cropModal.cropH, cX, cY, cW, cH);
+
+                        ctx.strokeStyle = '#50d8ff';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(cX, cY, cW, cH);
+
+                        const handleSize = 7;
+                        ctx.fillStyle = '#ffffff';
+                        ctx.strokeStyle = '#08131f';
+                        ctx.lineWidth = 1.5;
+
+                        const handles = [
+                            { x: cX, y: cY },
+                            { x: cX + cW, y: cY },
+                            { x: cX + cW, y: cY + cH },
+                            { x: cX, y: cY + cH },
+                        ];
+
+                        handles.forEach(h => {
+                            ctx.beginPath();
+                            ctx.arc(h.x, h.y, handleSize, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.stroke();
+                        });
+                    };
+                    img.src = this.cropModal.fullImageData;
+                },
+
+                getCanvasPointerPos(event, canvas) {
+                    const rect = canvas.getBoundingClientRect();
+                    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+                    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+                    return {
+                        x: clientX - rect.left,
+                        y: clientY - rect.top,
+                    };
+                },
+
+                handleCropPointerDown(event) {
+                    const canvas = document.getElementById('crop-canvas');
+                    if (!canvas) return;
+
+                    const pos = this.getCanvasPointerPos(event, canvas);
+                    const imgW = this.cropModal.imgWidth;
+                    const imgH = this.cropModal.imgHeight;
+                    const displayW = canvas.width;
+                    const displayH = canvas.height;
+
+                    const cX = (this.cropModal.cropX / imgW) * displayW;
+                    const cY = (this.cropModal.cropY / imgH) * displayH;
+                    const cW = (this.cropModal.cropW / imgW) * displayW;
+                    const cH = (this.cropModal.cropH / imgH) * displayH;
+
+                    const handleRadius = 14;
+                    const corners = [
+                        { name: 'nw', x: cX, y: cY },
+                        { name: 'ne', x: cX + cW, y: cY },
+                        { name: 'se', x: cX + cW, y: cY + cH },
+                        { name: 'sw', x: cX, y: cY + cH },
+                    ];
+
+                    let hitHandle = null;
+                    for (const corner of corners) {
+                        const dist = Math.hypot(pos.x - corner.x, pos.y - corner.y);
+                        if (dist <= handleRadius) {
+                            hitHandle = corner.name;
+                            break;
+                        }
+                    }
+
+                    if (hitHandle) {
+                        this.cropModal.isDragging = true;
+                        this.cropModal.dragHandle = hitHandle;
+                    } else if (pos.x >= cX && pos.x <= cX + cW && pos.y >= cY && pos.y <= cY + cH) {
+                        this.cropModal.isDragging = true;
+                        this.cropModal.dragHandle = 'move';
+                    } else {
+                        return;
+                    }
+
+                    this.cropModal.startX = pos.x;
+                    this.cropModal.startY = pos.y;
+                    this.cropModal.initialCrop = {
+                        x: this.cropModal.cropX,
+                        y: this.cropModal.cropY,
+                        w: this.cropModal.cropW,
+                        h: this.cropModal.cropH,
+                    };
+                },
+
+                handleCropPointerMove(event) {
+                    if (!this.cropModal.isDragging || !this.cropModal.initialCrop) return;
+                    const canvas = document.getElementById('crop-canvas');
+                    if (!canvas) return;
+
+                    const pos = this.getCanvasPointerPos(event, canvas);
+                    const dxCanvas = pos.x - this.cropModal.startX;
+                    const dyCanvas = pos.y - this.cropModal.startY;
+
+                    const imgW = this.cropModal.imgWidth;
+                    const imgH = this.cropModal.imgHeight;
+                    const scale = imgW / canvas.width;
+                    const targetAspect = (this.resolution.width || 1080) / (this.resolution.height || 2400);
+
+                    const dx = dxCanvas * scale;
+                    const dy = dyCanvas * scale;
+                    const init = this.cropModal.initialCrop;
+
+                    if (this.cropModal.dragHandle === 'move') {
+                        let newX = Math.round(init.x + dx);
+                        let newY = Math.round(init.y + dy);
+
+                        newX = Math.max(0, Math.min(imgW - init.w, newX));
+                        newY = Math.max(0, Math.min(imgH - init.h, newY));
+
+                        this.cropModal.cropX = newX;
+                        this.cropModal.cropY = newY;
+                    } else {
+                        let deltaW = 0;
+                        if (this.cropModal.dragHandle === 'se' || this.cropModal.dragHandle === 'ne') {
+                            deltaW = dx;
+                        } else {
+                            deltaW = -dx;
+                        }
+
+                        let newW = Math.round(init.w + deltaW);
+                        const minW = Math.round(imgW * 0.15);
+                        const maxW = Math.round(Math.min(imgW, imgH * targetAspect));
+
+                        newW = Math.max(minW, Math.min(maxW, newW));
+                        let newH = Math.round(newW / targetAspect);
+
+                        if (newH > imgH) {
+                            newH = imgH;
+                            newW = Math.round(newH * targetAspect);
+                        }
+
+                        let newX = init.x;
+                        let newY = init.y;
+
+                        if (this.cropModal.dragHandle === 'nw' || this.cropModal.dragHandle === 'sw') {
+                            newX = init.x + (init.w - newW);
+                        }
+                        if (this.cropModal.dragHandle === 'nw' || this.cropModal.dragHandle === 'ne') {
+                            newY = init.y + (init.h - newH);
+                        }
+
+                        if (newX >= 0 && newY >= 0 && newX + newW <= imgW && newY + newH <= imgH) {
+                            this.cropModal.cropX = newX;
+                            this.cropModal.cropY = newY;
+                            this.cropModal.cropW = newW;
+                            this.cropModal.cropH = newH;
+                        }
+                    }
+
+                    this.renderCropCanvas();
+                },
+
+                handleCropPointerUp() {
+                    this.cropModal.isDragging = false;
+                    this.cropModal.dragHandle = null;
+                },
+
+                applyCrop() {
+                    const { fullImageData, cropX, cropY, cropW, cropH } = this.cropModal;
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = cropW;
+                        canvas.height = cropH;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+                        this.background.imageData = canvas.toDataURL('image/png');
+                        this.background.type = 'image';
+                        this.cropModal.show = false;
+                    };
+                    img.src = fullImageData;
+                },
+
+                useFullImage() {
+                    this.background.imageData = this.cropModal.fullImageData;
                     this.background.type = 'image';
+                    this.cropModal.show = false;
+                },
+
+                cancelCrop() {
+                    this.cropModal.show = false;
                 },
 
                 getVisibleResolutionPresets() {

@@ -41,6 +41,7 @@ def schedule_response(
     status: int = 200,
     rate_limited: bool = False,
     retry_after_seconds: int = 0,
+    raw_rows: list[dict[str, str]] | None = None,
 ) -> JsonResponse:
     colored_subjects: list[dict[str, Any]] = []
     for index, subject in enumerate(subjects):
@@ -53,6 +54,7 @@ def schedule_response(
         "errors": errors,
         "rate_limited": rate_limited,
         "retry_after_seconds": retry_after_seconds,
+        "raw_rows": raw_rows or [],
     }
     response = JsonResponse(payload, status=status)
     response["HX-Trigger"] = json.dumps({"schedule-loaded": payload})
@@ -287,7 +289,7 @@ def parse_image(request: HttpRequest) -> JsonResponse:
             }
         )
 
-    return schedule_response(subjects, errors)
+    return schedule_response(subjects, errors, raw_rows=rows)
 
 
 @require_POST
