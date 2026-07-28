@@ -27,7 +27,7 @@ env/
 .vercel/
 
 # Django runtime artifacts
-staticfiles/
+staticfiles_build/
 *.sqlite3
 
 # Editor/OS files
